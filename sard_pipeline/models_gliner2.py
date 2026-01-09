@@ -125,7 +125,26 @@ def _batch_predict_entities(
             results.append(model.predict_entities(text, **kwargs))
         return results
 
-    raise AttributeError("GLiNER2 model does not expose entity prediction methods.")
+    if hasattr(model, "batch_predict"):
+        kwargs = {}
+        if _supports_kwarg(model.batch_predict, "labels"):
+            kwargs["labels"] = labels
+        if _supports_kwarg(model.batch_predict, "threshold"):
+            kwargs["threshold"] = threshold
+        return model.batch_predict(texts, **kwargs)
+
+    if hasattr(model, "predict"):
+        results = []
+        for text in texts:
+            kwargs = {}
+            if _supports_kwarg(model.predict, "labels"):
+                kwargs["labels"] = labels
+            if _supports_kwarg(model.predict, "threshold"):
+                kwargs["threshold"] = threshold
+            results.append(model.predict(text, **kwargs))
+        return results
+
+    return [[] for _ in texts]
 
 
 def extract_entities(
