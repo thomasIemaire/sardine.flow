@@ -14,6 +14,7 @@ from .models_yolo import classify_images, detect_zones
 from .zones import extract_zones
 from .ocr import ocr_zones
 from .models_gliner2 import classify_texts
+from .extraction import extract_entities
 from .utils import time_call
 
 
@@ -25,6 +26,7 @@ class PipelineResult:
     extracted_zones: List[List[Image.Image]]
     raw_texts: List[List[str]]
     classified_texts: List[Any]
+    extracted_entities: Dict[str, Any]
     logs: List[Dict[str, Any]]
 
 
@@ -108,6 +110,8 @@ def run_pipeline(base64_data: str, config: PipelineConfig) -> PipelineResult:
     )
     logs.append(log)
 
+    extracted_entities = extract_entities(flat_texts, classified, config.gliner2.agents)
+
     return PipelineResult(
         images=images,
         page_classes=page_classes,
@@ -115,6 +119,7 @@ def run_pipeline(base64_data: str, config: PipelineConfig) -> PipelineResult:
         extracted_zones=extracted,
         raw_texts=raw_texts,
         classified_texts=classified,
+        extracted_entities=extracted_entities,
         logs=logs,
     )
 
