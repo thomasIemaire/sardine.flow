@@ -121,7 +121,7 @@ _DEFAULT_PAGE_CONVERT: Literal["L", "RGB", "1"] = "RGB"
 _DEFAULT_SARD_DEVICE = "cpu"
 _DEFAULT_SARD_CLS_MODEL_PATH = "../sardine.agents/sard-cls/best.pt"
 _DEFAULT_SARD_DET_MODEL_PATH = "../sardine.agents/sard-det/best.pt"
-_DEFAULT_SARD_DET_CONFIDENCE = 0.4
+_DEFAULT_SARD_DET_CONFIDENCE = 0.5
 _DEFAULT_SARD_DET_PADDING = 8
 
 _DEFAULT_EXCLUDE_ZONES_CLASSES = ["logo", "signature"]
