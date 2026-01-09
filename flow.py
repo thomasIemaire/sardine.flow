@@ -53,19 +53,13 @@ _DEFAULT_OCR_CONFIG = "--oem 1 --psm 6"
 
 _DEFAULT_GLINER2_MODEL_ID = "fastino/gliner2-large-2907"
 _DEFAULT_GLIN_CLS_LABELS = [
-    {"address": "Adresse postale"},
-    {"siren": "Numéro SIREN"},
-    {"vat_number": "Numéro de TVA"},
-    {"invoice_lines": "Lignes de facture"},
-    {"total_amounts": "Montants totaux"},
-    {"receiver": "Information(s) (adresse, siren, numéro de TVA ...) sur l'entité qui reçoit le document, acheteur, destinataire, facturée"},
-    {"issuer": "Information(s) (adresse, siren, numéro de TVA ...) sur l'entité qui émet le document, vendeur, émetteur, facturant"},
-    {"date": "Date"},
-    {"unknown": "Inconnu"},
+    {"address": "Adresse postale complète."},
+    {"siren": "Siren d'une entreprise."},
+    {"reference": "description"},
 ]
 _DEFAULT_GLIN_CLS_MULTI_LABEL = False
 _DEFAULT_GLIN_CLS_THRESHOLD = 0.2
-_DEFAULT_GLIN_CLS_INCLUDE_CONFIDENCE = False
+_DEFAULT_GLIN_CLS_INCLUDE_CONFIDENCE = True
 
 
 # ---------------------------------------------------------------------------
