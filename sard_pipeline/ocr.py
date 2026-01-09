@@ -7,7 +7,7 @@ from typing import List
 
 from PIL import Image
 
-from .utils import require
+from .utils import log_debug, require
 
 try:
     import pytesseract
@@ -20,9 +20,18 @@ def ocr_zones(
     *,
     lang: str,
     config: str,
+    device: str = "cpu",
+    debug: bool = False,
 ) -> List[List[str]]:
     """Run Tesseract OCR on a list of cropped zones (per page)."""
     require(pytesseract, "pytesseract")
+
+    if device != "cpu":
+        log_debug(
+            "Tesseract OCR fonctionne uniquement sur CPU; le paramètre device est ignoré.",
+            debug,
+            tags=["ocr"],
+        )
 
     out: List[List[str]] = []
     for page_zones in extracted_zones:

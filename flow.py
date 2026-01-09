@@ -47,7 +47,7 @@ _DEFAULT_AGENTS = [
             "siren": { 
                 "type": "str",
                 "description": "Numéro SIREN de l'entreprise.",
-                "requirements": { "rule": "regex", "pattern": "(\d{3}\s*){3}" }
+                "requirements": { "rule": "regex", "pattern": r"(\d{3}\s*){3}" }
             }
         }
     },
@@ -61,7 +61,7 @@ _DEFAULT_AGENTS = [
             "vat.number": { 
                 "type": "str",
                 "description": "Numéro de TVA intracommunautaire.",
-                "requirements": { "rule": "regex", "pattern": "[A-Z]{2}\s*\d{2}\s*(\d{3}\s*){3}" }
+                "requirements": { "rule": "regex", "pattern": r"[A-Z]{2}\s*\d{2}\s*(\d{3}\s*){3}" }
             }
         }
     },
@@ -117,7 +117,7 @@ _DEFAULT_AGENTS = [
             "address.zip_code": { 
                 "type": "str",
                 "description": "Code postal.",
-                "requirements": { "rule": "regex", "pattern": "\d{5}" }
+                "requirements": { "rule": "regex", "pattern": r"\d{5}" }
             },
             "address.city": { 
                 "type": "str",
@@ -135,7 +135,7 @@ _DEFAULT_PAGE_MODE: Literal["first_page_only", "all_pages"] = "first_page_only"
 _DEFAULT_DPI = 300
 _DEFAULT_PAGE_CONVERT: Literal["L", "RGB", "1"] = "RGB"
 
-_DEFAULT_SARD_DEVICE = "cpu"
+_DEFAULT_DEVICE = "cpu"
 _DEFAULT_SARD_CLS_MODEL_PATH = "../sardine.agents/sard-cls/best.pt"
 _DEFAULT_SARD_DET_MODEL_PATH = "../sardine.agents/sard-det/best.pt"
 _DEFAULT_SARD_DET_CONFIDENCE = 0.5
@@ -162,7 +162,7 @@ def run(
     page_mode: str = _DEFAULT_PAGE_MODE,
     page_dpi: int = _DEFAULT_DPI,
     page_convert: str = _DEFAULT_PAGE_CONVERT,
-    sard_device: str = _DEFAULT_SARD_DEVICE,
+    device: str = _DEFAULT_DEVICE,
     cls_model_path: str = _DEFAULT_SARD_CLS_MODEL_PATH,
     det_model_path: str = _DEFAULT_SARD_DET_MODEL_PATH,
     det_confidence: float = _DEFAULT_SARD_DET_CONFIDENCE,
@@ -179,20 +179,26 @@ def run(
     """Backward-compatible pipeline runner returning only the timing logs."""
     cfg = PipelineConfig(
         page=PageConfig(mode=page_mode, dpi=page_dpi, convert=page_convert),  # type: ignore[arg-type]
-        yolo_cls=YoloClassificationConfig(model_path=cls_model_path, device=sard_device),
+        yolo_cls=YoloClassificationConfig(model_path=cls_model_path, device=device),
         yolo_det=YoloDetectionConfig(
             model_path=det_model_path,
-            device=sard_device,
+            device=device,
             confidence=det_confidence,
             padding=det_padding,
         ),
-        ocr=OcrConfig(exclude_zone_classes=exclude_zones_classes, lang=ocr_lang, config=ocr_config),
+        ocr=OcrConfig(
+            exclude_zone_classes=exclude_zones_classes,
+            lang=ocr_lang,
+            config=ocr_config,
+            device=device,
+        ),
         gliner2=Gliner2Config(
             model_id=glin_model_id,
             agents=agents,  # type: ignore[arg-type]
             multi_label=glin_multi_label,
             threshold=glin_threshold,
             include_confidence=glin_include_confidence,
+            device=device,
         ),
         debug=debug,
     )
@@ -221,7 +227,7 @@ def main() -> None:
     ap.add_argument("--page_dpi", type=int, default=_DEFAULT_DPI)
     ap.add_argument("--page_convert", type=str, choices=["L", "RGB", "1"], default=_DEFAULT_PAGE_CONVERT)
 
-    ap.add_argument("--sard_device", type=str, default=_DEFAULT_SARD_DEVICE)
+    ap.add_argument("--device", type=str, default=_DEFAULT_DEVICE, choices=["cpu", "cuda"])
     ap.add_argument("--cls_model_path", type=str, default=_DEFAULT_SARD_CLS_MODEL_PATH)
     ap.add_argument("--det_model_path", type=str, default=_DEFAULT_SARD_DET_MODEL_PATH)
     ap.add_argument("--det_confidence", type=float, default=_DEFAULT_SARD_DET_CONFIDENCE)
@@ -257,7 +263,7 @@ def main() -> None:
             page_mode=args.page_mode,
             page_dpi=args.page_dpi,
             page_convert=args.page_convert,
-            sard_device=args.sard_device,
+            device=args.device,
             cls_model_path=args.cls_model_path,
             det_model_path=args.det_model_path,
             det_confidence=args.det_confidence,

@@ -7,7 +7,7 @@ import threading
 from typing import Any, Dict, List, Sequence, Union
 
 from .config import LabelSpec
-from .utils import require
+from .utils import _supports_kwarg, require
 
 try:
     from gliner2 import GLiNER2  # type: ignore
@@ -19,7 +19,7 @@ _GLINER2_CACHE: Dict[str, Any] = {}
 _GLINER2_LOCK = threading.Lock()
 
 
-def get_cached_gliner2_model(model_id: str) -> Any:
+def get_cached_gliner2_model(model_id: str, *, device: str = "cpu") -> Any:
     """Load GLiNER2 only once (thread-safe)."""
     require(GLiNER2, "gliner2")
 
@@ -27,14 +27,21 @@ def get_cached_gliner2_model(model_id: str) -> Any:
     if not key:
         raise ValueError("model_id GLiNER2 vide")
 
-    if key in _GLINER2_CACHE:
-        return _GLINER2_CACHE[key]
+    cache_key = f"{key}::{device}"
+    if cache_key in _GLINER2_CACHE:
+        return _GLINER2_CACHE[cache_key]
 
     with _GLINER2_LOCK:
-        if key not in _GLINER2_CACHE:
-            _GLINER2_CACHE[key] = GLiNER2.from_pretrained(key)
+        if cache_key not in _GLINER2_CACHE:
+            kwargs: Dict[str, Any] = {}
+            if device and _supports_kwarg(GLiNER2.from_pretrained, "device"):
+                kwargs["device"] = device
+            model = GLiNER2.from_pretrained(key, **kwargs)
+            if device and not kwargs and hasattr(model, "to"):
+                model = model.to(device)
+            _GLINER2_CACHE[cache_key] = model
 
-    return _GLINER2_CACHE[key]
+    return _GLINER2_CACHE[cache_key]
 
 
 def _normalize_labels(labels: Sequence[LabelSpec]) -> List[str]:
@@ -58,9 +65,10 @@ def classify_texts(
     multi_label: bool,
     threshold: float,
     include_confidence: bool,
+    device: str = "cpu",
 ) -> List[Any]:
     """Classify short texts into high-level labels."""
-    model = get_cached_gliner2_model(model_id)
+    model = get_cached_gliner2_model(model_id, device=device)
 
     sep = " :: "
     task_name = "text_classification"

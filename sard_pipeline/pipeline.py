@@ -83,6 +83,7 @@ def run_pipeline(base64_data: str, config: PipelineConfig) -> PipelineResult:
         extracted,
         lang=config.ocr.lang,
         config=config.ocr.config,
+        device=config.ocr.device,
         debug=config.debug,
     )
     logs.append(log)
@@ -103,6 +104,7 @@ def run_pipeline(base64_data: str, config: PipelineConfig) -> PipelineResult:
         multi_label=config.gliner2.multi_label,
         threshold=config.gliner2.threshold,
         include_confidence=config.gliner2.include_confidence,
+        device=config.gliner2.device,
         debug=config.debug,
     )
     logs.append(log)
