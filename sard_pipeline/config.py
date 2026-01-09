@@ -44,19 +44,7 @@ LabelSpec = Union[str, Dict[str, str]]
 @dataclass(frozen=True)
 class Gliner2Config:
     model_id: str = "fastino/gliner2-large-2907"
-    labels: List[LabelSpec] = field(
-        default_factory=lambda: [
-            {"address": "Adresse postale"},
-            {"siren": "Numéro SIREN"},
-            {"vat_number": "Numéro de TVA"},
-            {"invoice_lines": "Lignes de facture"},
-            {"total_amounts": "Montants totaux"},
-            {"receiver": "Information(s) (adresse, siren, numéro de TVA ...) sur l'entité qui reçoit le document, acheteur, destinataire, facturée"},
-            {"issuer": "Information(s) (adresse, siren, numéro de TVA ...) sur l'entité qui émet le document, vendeur, émetteur, facturant"},
-            {"date": "Date"},
-            {"unknown": "Inconnu"},
-        ]
-    )
+    agents: List[Dict[str, Any]] = field(default_factory=list)
     multi_label: bool = False
     threshold: float = 0.2
     include_confidence: bool = False

@@ -36,6 +36,71 @@ from sard_pipeline.models_gliner2 import classify_texts
 # Defaults (kept to match your original script's CLI defaults)
 # ---------------------------------------------------------------------------
 
+_DEFAULT_AGENTS = [
+    {
+        "name": "Siren",
+        "reference": "siren",
+        "description": "Siren d'une entreprise.",
+        "root": "",
+        "mapper": {
+            "siren": { 
+                "type": "str",
+                "description": "Numéro SIREN de l'entreprise.",
+                "requirements": { "rule": "regex", "pattern": "(\d{3}\s*){3}" }
+            }
+        }
+    },
+    {
+        "name": "Montants",
+        "reference": "amounts",
+        "description": "Montants présents dans le document.",
+        "root": "",
+        "mapper": {
+            "amounts.ttc": { 
+                "type": "float",
+                "description": "Montant toutes taxes comprises."
+            },
+            "amounts.ht": { 
+                "type": "float",
+                "description": "Montant hors taxes."
+            },
+            "amounts.tva": { 
+                "type": "float",
+                "description": "Montant de la TVA."
+            }
+        }
+    },
+    {
+        "name": "Adresse postale",
+        "reference": "address",
+        "description": "Adresse postale complète.",
+        "root": "",
+        "mapper": {
+            "address.name": {
+                "type": "str",
+                "description": "Nom de la personne ou de l'entreprise."
+            },
+            "address.street": { 
+                "type": "str",
+                "description": "Adresse postale complète."
+            },
+            "address.zip_code": { 
+                "type": "str",
+                "description": "Code postal.",
+                "requirements": { "rule": "regex", "pattern": "\d{5}" }
+            },
+            "address.city": { 
+                "type": "str",
+                "description": "Ville."
+            },
+            "address.country": { 
+                "type": "str",
+                "description": "Pays."
+            }
+        }
+    }
+]
+
 _DEFAULT_PAGE_MODE: Literal["first_page_only", "all_pages"] = "first_page_only"
 _DEFAULT_DPI = 300
 _DEFAULT_PAGE_CONVERT: Literal["L", "RGB", "1"] = "RGB"
@@ -52,17 +117,6 @@ _DEFAULT_OCR_LANG = "fra+eng"
 _DEFAULT_OCR_CONFIG = "--oem 1 --psm 6"
 
 _DEFAULT_GLINER2_MODEL_ID = "fastino/gliner2-large-2907"
-_DEFAULT_GLIN_CLS_LABELS = [
-    {"address": "Adresse postale"},
-    {"siren": "Numéro SIREN"},
-    {"vat_number": "Numéro de TVA"},
-    {"invoice_lines": "Lignes de facture"},
-    {"total_amounts": "Montants totaux"},
-    {"receiver": "Information(s) (adresse, siren, numéro de TVA ...) sur l'entité qui reçoit le document, acheteur, destinataire, facturée"},
-    {"issuer": "Information(s) (adresse, siren, numéro de TVA ...) sur l'entité qui émet le document, vendeur, émetteur, facturant"},
-    {"date": "Date"},
-    {"unknown": "Inconnu"},
-]
 _DEFAULT_GLIN_CLS_MULTI_LABEL = False
 _DEFAULT_GLIN_CLS_THRESHOLD = 0.2
 _DEFAULT_GLIN_CLS_INCLUDE_CONFIDENCE = False
@@ -74,6 +128,7 @@ _DEFAULT_GLIN_CLS_INCLUDE_CONFIDENCE = False
 
 def run(
     base64_data: str,
+    agents: List[Dict[str, Any]],
     page_mode: str = _DEFAULT_PAGE_MODE,
     page_dpi: int = _DEFAULT_DPI,
     page_convert: str = _DEFAULT_PAGE_CONVERT,
@@ -86,7 +141,6 @@ def run(
     ocr_lang: str = _DEFAULT_OCR_LANG,
     ocr_config: str = _DEFAULT_OCR_CONFIG,
     glin_model_id: str = _DEFAULT_GLINER2_MODEL_ID,
-    glin_labels: List[Any] = _DEFAULT_GLIN_CLS_LABELS,
     glin_multi_label: bool = _DEFAULT_GLIN_CLS_MULTI_LABEL,
     glin_threshold: float = _DEFAULT_GLIN_CLS_THRESHOLD,
     glin_include_confidence: bool = _DEFAULT_GLIN_CLS_INCLUDE_CONFIDENCE,
@@ -105,7 +159,7 @@ def run(
         ocr=OcrConfig(exclude_zone_classes=exclude_zones_classes, lang=ocr_lang, config=ocr_config),
         gliner2=Gliner2Config(
             model_id=glin_model_id,
-            labels=glin_labels,  # type: ignore[arg-type]
+            agents=agents,  # type: ignore[arg-type]
             multi_label=glin_multi_label,
             threshold=glin_threshold,
             include_confidence=glin_include_confidence,
@@ -119,38 +173,6 @@ def run(
 # CLI
 # ---------------------------------------------------------------------------
 
-def _parse_labels(values: Sequence[str] | None) -> List[Union[str, Dict[str, str]]]:
-    """Parse --glin_labels items.
-
-    Accepted forms:
-    - key=description
-    - JSON dict: {"key": "description"}
-    - plain label: "unknown"
-    """
-    if not values:
-        return _DEFAULT_GLIN_CLS_LABELS
-
-    out: List[Union[str, Dict[str, str]]] = []
-    for v in values:
-        v = v.strip()
-        if not v:
-            continue
-        if v.startswith("{") and v.endswith("}"):
-            try:
-                obj = json.loads(v)
-                if isinstance(obj, dict):
-                    out.append({str(k): str(val) for k, val in obj.items()})
-                    continue
-            except Exception:
-                pass
-        if "=" in v:
-            k, desc = v.split("=", 1)
-            out.append({k.strip(): desc.strip()})
-        else:
-            out.append(v)
-    return out or _DEFAULT_GLIN_CLS_LABELS
-
-
 def _read_base64_arg(value: str) -> str:
     # Backward-compat: historically --base64 was actually a file path.
     if os.path.exists(value):
@@ -163,6 +185,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
 
     ap.add_argument("--base64", type=str, required=True, help="Base64 string or path to a text file containing base64")
+    ap.add_argument("--agents", type=str, default=json.dumps(_DEFAULT_AGENTS), help="JSON string defining the agents")
 
     ap.add_argument("--page_mode", type=str, choices=["first_page_only", "all_pages"], default=_DEFAULT_PAGE_MODE)
     ap.add_argument("--page_dpi", type=int, default=_DEFAULT_DPI)
@@ -180,13 +203,6 @@ def main() -> None:
     ap.add_argument("--ocr_config", type=str, default=_DEFAULT_OCR_CONFIG)
 
     ap.add_argument("--glin_model_id", type=str, default=_DEFAULT_GLINER2_MODEL_ID)
-    ap.add_argument(
-        "--glin_labels",
-        type=str,
-        nargs="*",
-        default=None,
-        help="Labels: either key=description, JSON dict, or plain label strings",
-    )
     ap.add_argument("--glin_multi_label", action="store_true", default=_DEFAULT_GLIN_CLS_MULTI_LABEL)
     ap.add_argument("--glin_threshold", type=float, default=_DEFAULT_GLIN_CLS_THRESHOLD)
     ap.add_argument("--glin_include_confidence", action="store_true", default=_DEFAULT_GLIN_CLS_INCLUDE_CONFIDENCE)
@@ -198,7 +214,6 @@ def main() -> None:
     args = ap.parse_args()
 
     base64_data = _read_base64_arg(args.base64)
-    glin_labels = _parse_labels(args.glin_labels)
 
     # Run N times (useful for warmup / benchmarking)
     last_outer_log: Dict[str, Any] | None = None
@@ -208,6 +223,7 @@ def main() -> None:
         inner_logs, outer_log = _timed_function(
             run,
             base64_data,
+            json.loads(args.agents),
             page_mode=args.page_mode,
             page_dpi=args.page_dpi,
             page_convert=args.page_convert,
@@ -220,7 +236,6 @@ def main() -> None:
             ocr_lang=args.ocr_lang,
             ocr_config=args.ocr_config,
             glin_model_id=args.glin_model_id,
-            glin_labels=glin_labels,
             glin_multi_label=args.glin_multi_label,
             glin_threshold=args.glin_threshold,
             glin_include_confidence=args.glin_include_confidence,

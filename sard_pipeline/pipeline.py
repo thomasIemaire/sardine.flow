@@ -88,13 +88,15 @@ def run_pipeline(base64_data: str, config: PipelineConfig) -> PipelineResult:
     logs.append(log)
 
     cleaned_texts = [[_clean_text(t) for t in page] for page in raw_texts]
-
     flat_texts = [t for page in cleaned_texts for t in page]
+
+    labels = [{ a.get("reference"): a.get("description") } for a in config.gliner2.agents]
+
     classified, log = time_call(
         classify_texts,
         flat_texts,
         model_id=config.gliner2.model_id,
-        labels=config.gliner2.labels,
+        labels=[*labels, { "unlabeled": "Unlabeled" }],
         multi_label=config.gliner2.multi_label,
         threshold=config.gliner2.threshold,
         include_confidence=config.gliner2.include_confidence,
