@@ -90,7 +90,7 @@ def run_pipeline(base64_data: str, config: PipelineConfig) -> PipelineResult:
     cleaned_texts = [[_clean_text(t) for t in page] for page in raw_texts]
     flat_texts = [t for page in cleaned_texts for t in page]
 
-    labels = [{ a.get("reference"): a.get("description") } for a in config.gliner2.agents]
+    labels = [{ a.get("reference"): a.get("description") } if a.get("target_zone") else {} for a in config.gliner2.agents]
 
     classified, log = time_call(
         classify_texts,

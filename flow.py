@@ -41,6 +41,7 @@ _DEFAULT_AGENTS = [
         "name": "Siren",
         "reference": "siren",
         "description": "Siren d'une entreprise.",
+        "target_zone": True,
         "root": "",
         "mapper": {
             "siren": { 
@@ -54,6 +55,7 @@ _DEFAULT_AGENTS = [
         "name": "Numéro de TVA",
         "reference": "vat-number",
         "description": "Numéro de TVA intracommunautaire.",
+        "target_zone": True,
         "root": "",
         "mapper": {
             "vat.number": { 
@@ -67,6 +69,7 @@ _DEFAULT_AGENTS = [
         "name": "Montants",
         "reference": "amounts",
         "description": "Montants présents dans le document.",
+        "target_zone": True,
         "root": "",
         "mapper": {
             "amounts.ttc": { 
@@ -84,9 +87,23 @@ _DEFAULT_AGENTS = [
         }
     },
     {
+        "name": "Devise",
+        "reference": "currency",
+        "description": "Devise utilisée pour les montants.",
+        "target_zone": False,
+        "root": "",
+        "mapper": {
+            "currency": { 
+                "type": "str",
+                "description": "Devise utilisée (ex: EUR, USD)."
+            }
+        }
+    },
+    {
         "name": "Adresse postale",
         "reference": "address",
         "description": "Adresse postale complète.",
+        "target_zone": True,
         "root": "",
         "mapper": {
             "address.name": {
