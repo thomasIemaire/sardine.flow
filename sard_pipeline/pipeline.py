@@ -13,7 +13,7 @@ from .image_loading import load_images_from_base64
 from .models_yolo import classify_images, detect_zones
 from .zones import extract_zones
 from .ocr import ocr_zones
-from .models_gliner2 import classify_texts
+from .models_gliner2 import classify_texts, extract_entities
 from .utils import time_call
 
 
@@ -26,6 +26,7 @@ class PipelineResult:
     raw_texts: List[List[str]]
     cleaned_texts: List[List[str]]
     classified_texts: List[Any]
+    extracted_entities: List[List[Dict[str, Any]]]
     logs: List[Dict[str, Any]]
 
 
@@ -102,6 +103,17 @@ def run_pipeline(base64_data: str, config: PipelineConfig) -> PipelineResult:
     )
     logs.append(log)
 
+    entities, log = time_call(
+        extract_entities,
+        flat_texts,
+        model_id=config.gliner2.model_id,
+        labels=config.gliner2.labels,
+        threshold=config.gliner2.threshold,
+        include_confidence=config.gliner2.include_confidence,
+        debug=config.debug,
+    )
+    logs.append(log)
+
     return PipelineResult(
         images=images,
         page_classes=page_classes,
@@ -110,6 +122,7 @@ def run_pipeline(base64_data: str, config: PipelineConfig) -> PipelineResult:
         raw_texts=raw_texts,
         cleaned_texts=cleaned_texts,
         classified_texts=classified,
+        extracted_entities=entities,
         logs=logs,
     )
 
