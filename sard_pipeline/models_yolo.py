@@ -8,8 +8,9 @@ import threading
 from typing import Any, Dict, List, Literal, Optional, TypedDict
 
 from PIL import Image
+import torch
 
-from .utils import require
+from .utils import log_debug, require
 
 try:
     from ultralytics import YOLO  # type: ignore
@@ -56,19 +57,47 @@ def _select_pages(images: List[Image.Image], page_mode: Literal["first_page_only
     return images
 
 
+def _resolve_device(device: str, debug: bool) -> str:
+    requested = (device or "cpu").lower()
+    if requested == "cpu":
+        return "cpu"
+    if requested.startswith("cuda"):
+        if not torch.cuda.is_available():
+            log_debug(
+                "CUDA indisponible; exécution sur CPU.",
+                debug,
+                tags=["yolo", "device"],
+            )
+            return "cpu"
+        capability = torch.cuda.get_device_capability()
+        arch = f"sm_{capability[0]}{capability[1]}"
+        supported = torch.cuda.get_arch_list()
+        if supported and arch not in supported:
+            log_debug(
+                f"Architecture GPU {arch} non supportée par cette version de PyTorch; "
+                "exécution sur CPU.",
+                debug,
+                tags=["yolo", "device"],
+            )
+            return "cpu"
+    return device
+
+
 def classify_images(
     images: List[Image.Image],
     *,
     model_path: str,
     page_mode: Literal["first_page_only", "all_pages"] = "first_page_only",
     device: str = "cpu",
+    debug: bool = False,
 ) -> List[Any]:
     """Run image-level classification on each selected page."""
     model = get_cached_model(model_path)
     pages = _select_pages(images, page_mode)
+    resolved_device = _resolve_device(device, debug)
 
     # ultralytics accepts either a single image or a list. We always pass a list for consistency.
-    predictions = model.predict(source=pages, device=device, save=False, verbose=False)
+    predictions = model.predict(source=pages, device=resolved_device, save=False, verbose=False)
 
     results: List[Any] = []
     for res in predictions:
@@ -87,6 +116,7 @@ def detect_zones(
     device: str = "cpu",
     confidence: float = 0.4,
     padding: int = 8,
+    debug: bool = False,
 ) -> List[List[Zone]]:
     """Detect zones (text, table, logo, signature, ...) on each selected page."""
     require(np, "numpy")
@@ -95,8 +125,9 @@ def detect_zones(
 
     model = get_cached_model(model_path)
     pages = _select_pages(images, page_mode)
+    resolved_device = _resolve_device(device, debug)
 
-    det_results = model.predict(source=pages, device=device, conf=confidence, save=False, verbose=False)
+    det_results = model.predict(source=pages, device=resolved_device, conf=confidence, iou=.5, save=False, verbose=False)
 
     out: List[List[Zone]] = []
     for img, res in zip(pages, det_results):
