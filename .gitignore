@@ -2,3 +2,5 @@ logs.csv
 .env
 venv/
 __pycache__/
+*.txt
+^requirements.txt
