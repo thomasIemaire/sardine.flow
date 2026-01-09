@@ -24,7 +24,6 @@ class PipelineResult:
     zones: List[List[Dict[str, Any]]]
     extracted_zones: List[List[Image.Image]]
     raw_texts: List[List[str]]
-    cleaned_texts: List[List[str]]
     classified_texts: List[Any]
     logs: List[Dict[str, Any]]
 
@@ -88,13 +87,13 @@ def run_pipeline(base64_data: str, config: PipelineConfig) -> PipelineResult:
     )
     logs.append(log)
 
-    cleaned_texts = [[_clean_text(t) for t in page] for page in raw_texts]
-    flat_texts = [t for page in cleaned_texts for t in page]
+    flat_texts = [t for page in raw_texts for t in page]
 
-    labels = [{ "unlabeled": "Unlabeled" }]
+    labels = []
     for a in config.gliner2.agents:
         if a.get("target_zone"):
-            labels.append({ a.get("reference"): a.get("description") })
+            labels.append({ a.get("reference"): a.get('description') })
+    labels.append({ "other": f"Other / Unrelated, not corresponding to ({', '.join([a.get('reference') for a in config.gliner2.agents if a.get('target_zone')])})" })
 
     classified, log = time_call(
         classify_texts,
@@ -115,7 +114,6 @@ def run_pipeline(base64_data: str, config: PipelineConfig) -> PipelineResult:
         zones=zones,
         extracted_zones=extracted,
         raw_texts=raw_texts,
-        cleaned_texts=cleaned_texts,
         classified_texts=classified,
         logs=logs,
     )

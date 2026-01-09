@@ -127,7 +127,7 @@ def detect_zones(
     pages = _select_pages(images, page_mode)
     resolved_device = _resolve_device(device, debug)
 
-    det_results = model.predict(source=pages, device=resolved_device, conf=confidence, save=False, verbose=False)
+    det_results = model.predict(source=pages, device=resolved_device, conf=confidence, iou=.5, save=False, verbose=False)
 
     out: List[List[Zone]] = []
     for img, res in zip(pages, det_results):

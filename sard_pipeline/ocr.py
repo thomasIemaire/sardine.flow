@@ -39,4 +39,5 @@ def ocr_zones(
         for zone_img in page_zones:
             page_texts.append(pytesseract.image_to_string(zone_img, lang=lang, config=config))
         out.append(page_texts)
+
     return out
