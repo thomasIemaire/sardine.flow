@@ -97,3 +97,71 @@ def classify_texts(
             e["label"] = e["label"].split(sep)[0] if sep in e["label"] else e["label"]
 
     return flat
+
+
+def _batch_predict_entities(
+    model: Any,
+    texts: List[str],
+    *,
+    labels: Sequence[str],
+    threshold: float,
+) -> List[Any]:
+    if hasattr(model, "batch_predict_entities"):
+        kwargs: Dict[str, Any] = {}
+        if _supports_kwarg(model.batch_predict_entities, "labels"):
+            kwargs["labels"] = labels
+        if _supports_kwarg(model.batch_predict_entities, "threshold"):
+            kwargs["threshold"] = threshold
+        return model.batch_predict_entities(texts, **kwargs)
+
+    if hasattr(model, "predict_entities"):
+        results: List[Any] = []
+        for text in texts:
+            kwargs = {}
+            if _supports_kwarg(model.predict_entities, "labels"):
+                kwargs["labels"] = labels
+            if _supports_kwarg(model.predict_entities, "threshold"):
+                kwargs["threshold"] = threshold
+            results.append(model.predict_entities(text, **kwargs))
+        return results
+
+    raise AttributeError("GLiNER2 model does not expose entity prediction methods.")
+
+
+def extract_entities(
+    texts: List[str],
+    *,
+    model_id: str,
+    labels: Sequence[LabelSpec],
+    threshold: float,
+    device: str = "cpu",
+) -> List[List[Dict[str, Any]]]:
+    """Extract entities from texts using GLiNER2."""
+    model = get_cached_gliner2_model(model_id, device=device)
+    normalized_labels = _normalize_labels(labels)
+
+    raw = _batch_predict_entities(
+        model,
+        texts,
+        labels=normalized_labels,
+        threshold=threshold,
+    )
+
+    cleaned: List[List[Dict[str, Any]]] = []
+    for item in raw:
+        entities = item
+        if isinstance(item, dict) and "entities" in item:
+            entities = item.get("entities", [])
+
+        normalized_entities: List[Dict[str, Any]] = []
+        for ent in entities or []:
+            if not isinstance(ent, dict):
+                continue
+            label = ent.get("label")
+            if isinstance(label, str) and " :: " in label:
+                ent = dict(ent)
+                ent["label"] = label.split(" :: ")[0]
+            normalized_entities.append(ent)
+        cleaned.append(normalized_entities)
+
+    return cleaned
