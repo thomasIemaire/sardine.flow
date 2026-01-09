@@ -1,0 +1,21 @@
+# Core
+pillow>=10.0.0
+numpy>=1.24.0
+opencv-python>=4.8.0
+pytesseract>=0.3.10
+pymupdf>=1.23.0
+
+# YOLO (sard-cls / sard-det)
+ultralytics>=8.2.0
+
+# GLiNER2
+gliner2>=0.0.6
+transformers>=4.41.0
+huggingface-hub>=0.23.0
+
+# Torch (nécessaire pour ultralytics + gliner2)
+torch>=2.1.0
+
+# Table OCR (PaddleOCR PP-Structure)
+paddleocr>=2.7.0.3
+paddlepaddle>=2.6.0
