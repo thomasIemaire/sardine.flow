@@ -51,6 +51,19 @@ _DEFAULT_AGENTS = [
         }
     },
     {
+        "name": "Numéro de TVA",
+        "reference": "vat-number",
+        "description": "Numéro de TVA intracommunautaire.",
+        "root": "",
+        "mapper": {
+            "vat.number": { 
+                "type": "str",
+                "description": "Numéro de TVA intracommunautaire.",
+                "requirements": { "rule": "regex", "pattern": "[A-Z]{2}\s*\d{2}\s*(\d{3}\s*){3}" }
+            }
+        }
+    },
+    {
         "name": "Montants",
         "reference": "amounts",
         "description": "Montants présents dans le document.",
