@@ -8,12 +8,12 @@ pymupdf>=1.23.0
 # YOLO (sard-cls / sard-det)
 ultralytics>=8.2.0
 
-# GLiNER2
-gliner2>=0.0.6
+# GLiNER
+gliner>=0.2.8
 transformers>=4.41.0
 huggingface-hub>=0.23.0
 
-# Torch (nécessaire pour ultralytics + gliner2)
+# Torch (nécessaire pour ultralytics + gliner)
 torch>=2.1.0
 
 # Table OCR (PaddleOCR PP-Structure)
