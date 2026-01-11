@@ -28,6 +28,7 @@ class YoloDetectionConfig:
     model_path: str = "../sardine.agents/sard-det/best.pt"
     device: str = "cpu"
     confidence: float = 0.4
+    iou: float = 0.5
     padding: int = 8
 
 

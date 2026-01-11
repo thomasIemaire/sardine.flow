@@ -57,8 +57,18 @@ def _normalize_labels(labels: Sequence[LabelSpec]) -> List[str]:
     return out
 
 
+def get_labels_from_agents(agents: Sequence[Dict[str, Any]]) -> List[LabelSpec]:
+    """Extract GLiNER2 labels from agent configs."""
+    labels: List[LabelSpec] = []
+    for a in agents:
+        if a.get("target_zone"):
+            labels.append({ a.get("reference"): a.get('description') })
+    labels.append({ "other": f"Other / Unrelated, not corresponding to ({', '.join([a.get('reference') for a in agents if a.get('target_zone')])})" })
+    return labels
+
+
 def classify_texts(
-    texts: List[str],
+    texts: List[List[str]],
     *,
     model_id: str,
     labels: Sequence[LabelSpec],
@@ -66,7 +76,7 @@ def classify_texts(
     threshold: float,
     include_confidence: bool,
     device: str = "cpu",
-) -> List[Any]:
+) -> List[List[Dict[str, Any]]]:
     """Classify short texts into high-level labels."""
     model = get_cached_gliner2_model(model_id, device=device)
 
@@ -80,20 +90,91 @@ def classify_texts(
         }
     }
 
-    raw = model.batch_classify_text(
-        texts,
-        tasks=tasks,
-        threshold=threshold,
-        format_results=True,
-        include_confidence=include_confidence,
-        include_spans=False,
-    )
+    out: List[List[Dict[str, Any]]] = []
 
-    flat = [r.get(task_name) for r in raw]
+    for page in texts:
+        raw = model.batch_classify_text(
+            page,
+            tasks=tasks,
+            threshold=threshold,
+            format_results=True,
+            include_confidence=include_confidence,
+            include_spans=False,
+        )
 
-    # Remove label descriptions (keep only the key).
-    for r in flat:
-        for e in r:
-            e["label"] = e["label"].split(sep)[0] if sep in e["label"] else e["label"]
+        flat = [{"text": page[i], "class": r.get(task_name)} for i, r in enumerate(raw)]
 
-    return flat
+        # Remove label descriptions (keep only the key).
+        for r in flat:
+            for e in r["class"]:
+                e["label"] = e["label"].split(sep)[0] if sep in e["label"] else e["label"]
+
+        out.append(flat)
+
+    return out
+
+
+def get_entities_from_mapper(entities: Dict[str, Any], *, all_entities: List[str] = []) -> List[str]:
+    """Extract entity names from a mapper config."""
+    sep = " :: "
+    out: List[str] = []
+
+    for k, v in entities.items():
+        description = v.get("description", "")
+        if description:
+            description = f"{sep}{description}"
+        out.append(f"{k}{description} (Ne surtout pas confondre avec : {', '.join([e for e in all_entities if e != k])})")
+
+    return out
+
+
+def extract_entities(
+    agents: Sequence[Dict[str, Any]],
+    classified_texts: List[List[Dict[str, Any]]],
+    *,
+    model_id: str,
+    threshold: float,
+    include_confidence: bool,
+    device: str = "cpu",
+) -> List[List[Dict[str, Any]]]:
+    """Extract entities from short texts."""
+    model = get_cached_gliner2_model(model_id, device=device)
+    all_entities = [e for agent in agents for e in list(agent.get("mapper", {}).keys())]
+    out = []
+
+    for page_idx, page in enumerate(classified_texts):
+        for agent in agents:
+            mapper = agent.get("mapper", {})
+            entities = get_entities_from_mapper(mapper, all_entities=all_entities)
+            
+            if not entities:
+                continue
+            
+            raw = model.batch_extract_entities(
+                [r["text"] for r in page],
+                entity_types=entities,
+                threshold=threshold,
+                format_results=True,
+                include_confidence=include_confidence,
+            )
+
+            for i, r in enumerate(raw):
+                if page_idx >= len(out):
+                    out.append([])
+
+                entry: Dict[str, Any] = {
+                    "text": page[i]["text"],
+                    "agent_reference": agent.get("reference"),
+                    "entities": r.get("entities", []),
+                }
+
+                entities = entry.get("entities")
+                if entities:
+                    entry["entities"] = {
+                        (k.split(" :: ", 1)[0] if " :: " in k else k): v
+                        for k, v in entities.items()
+                    }
+
+                out[page_idx].append(entry)
+    
+    return out

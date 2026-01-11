@@ -115,6 +115,7 @@ def detect_zones(
     page_mode: Literal["first_page_only", "all_pages"] = "first_page_only",
     device: str = "cpu",
     confidence: float = 0.4,
+    iou: float = 0.5,
     padding: int = 8,
     debug: bool = False,
 ) -> List[List[Zone]]:
@@ -127,7 +128,7 @@ def detect_zones(
     pages = _select_pages(images, page_mode)
     resolved_device = _resolve_device(device, debug)
 
-    det_results = model.predict(source=pages, device=resolved_device, conf=confidence, iou=.5, save=False, verbose=False)
+    det_results = model.predict(source=pages, device=resolved_device, conf=confidence, iou=iou, save=False, verbose=False)
 
     out: List[List[Zone]] = []
     for img, res in zip(pages, det_results):

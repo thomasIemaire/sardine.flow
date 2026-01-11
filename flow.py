@@ -68,7 +68,7 @@ _DEFAULT_AGENTS = [
     {
         "name": "Montants",
         "reference": "amounts",
-        "description": "Montants présents dans le document.",
+        "description": "Montants TTC, HT et TVA présents dans le document.",
         "target_zone": True,
         "root": "",
         "mapper": {
@@ -102,7 +102,7 @@ _DEFAULT_AGENTS = [
     {
         "name": "Adresse postale",
         "reference": "address",
-        "description": "Adresse postale complète.",
+        "description": "Adresse postale.",
         "target_zone": True,
         "root": "",
         "mapper": {
@@ -138,7 +138,8 @@ _DEFAULT_PAGE_CONVERT: Literal["L", "RGB", "1"] = "RGB"
 _DEFAULT_DEVICE = "cpu"
 _DEFAULT_SARD_CLS_MODEL_PATH = "../sardine.agents/sard-cls/best.pt"
 _DEFAULT_SARD_DET_MODEL_PATH = "../sardine.agents/sard-det/best.pt"
-_DEFAULT_SARD_DET_CONFIDENCE = 0.5
+_DEFAULT_SARD_DET_CONFIDENCE = 0.4
+_DEFAULT_SARD_DET_IOU = 0.5
 _DEFAULT_SARD_DET_PADDING = 8
 
 _DEFAULT_EXCLUDE_ZONES_CLASSES = ["logo", "signature"]
@@ -166,6 +167,7 @@ def run(
     cls_model_path: str = _DEFAULT_SARD_CLS_MODEL_PATH,
     det_model_path: str = _DEFAULT_SARD_DET_MODEL_PATH,
     det_confidence: float = _DEFAULT_SARD_DET_CONFIDENCE,
+    det_iou: float = _DEFAULT_SARD_DET_IOU,
     det_padding: int = _DEFAULT_SARD_DET_PADDING,
     exclude_zones_classes: List[str] = _DEFAULT_EXCLUDE_ZONES_CLASSES,
     ocr_lang: str = _DEFAULT_OCR_LANG,
@@ -184,6 +186,7 @@ def run(
             model_path=det_model_path,
             device=device,
             confidence=det_confidence,
+            iou=det_iou,
             padding=det_padding,
         ),
         ocr=OcrConfig(
@@ -231,6 +234,7 @@ def main() -> None:
     ap.add_argument("--cls_model_path", type=str, default=_DEFAULT_SARD_CLS_MODEL_PATH)
     ap.add_argument("--det_model_path", type=str, default=_DEFAULT_SARD_DET_MODEL_PATH)
     ap.add_argument("--det_confidence", type=float, default=_DEFAULT_SARD_DET_CONFIDENCE)
+    ap.add_argument("--det_iou", type=float, default=_DEFAULT_SARD_DET_IOU)
     ap.add_argument("--det_padding", type=int, default=_DEFAULT_SARD_DET_PADDING)
 
     ap.add_argument("--ocr_exclude_zones_classes", type=str, nargs="*", default=_DEFAULT_EXCLUDE_ZONES_CLASSES)
@@ -267,6 +271,7 @@ def main() -> None:
             cls_model_path=args.cls_model_path,
             det_model_path=args.det_model_path,
             det_confidence=args.det_confidence,
+            det_iou=args.det_iou,
             det_padding=args.det_padding,
             exclude_zones_classes=args.ocr_exclude_zones_classes,
             ocr_lang=args.ocr_lang,
