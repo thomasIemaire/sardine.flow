@@ -13,7 +13,7 @@ from .image_loading import load_images_from_base64
 from .models_yolo import classify_images, detect_zones
 from .zones import extract_zones
 from .ocr import ocr_zones
-from .models_gliner2 import classify_texts
+from .models_gliner2 import classify_texts, extract_entities, get_labels_from_agents
 from .utils import time_call
 
 
@@ -24,13 +24,8 @@ class PipelineResult:
     zones: List[List[Dict[str, Any]]]
     extracted_zones: List[List[Image.Image]]
     raw_texts: List[List[str]]
-    cleaned_texts: List[List[str]]
     classified_texts: List[Any]
     logs: List[Dict[str, Any]]
-
-
-def _clean_text(s: str) -> str:
-    return s.strip().replace("\n", " ").replace("\r", " ")
 
 
 def run_pipeline(base64_data: str, config: PipelineConfig) -> PipelineResult:
@@ -64,6 +59,7 @@ def run_pipeline(base64_data: str, config: PipelineConfig) -> PipelineResult:
         page_mode=config.page.mode,
         device=config.yolo_det.device,
         confidence=config.yolo_det.confidence,
+        iou=config.yolo_det.iou,
         padding=config.yolo_det.padding,
         debug=config.debug,
     )
@@ -83,27 +79,32 @@ def run_pipeline(base64_data: str, config: PipelineConfig) -> PipelineResult:
         extracted,
         lang=config.ocr.lang,
         config=config.ocr.config,
+        device=config.ocr.device,
         debug=config.debug,
     )
     logs.append(log)
 
-    cleaned_texts = [[_clean_text(t) for t in page] for page in raw_texts]
-    flat_texts = [t for page in cleaned_texts for t in page]
-
-    labels = [{ "unlabeled": "Unlabeled" }]
-    for a in config.gliner2.agents:
-        if a.get("target_zone"):
-            labels.append({ a.get("reference"): a.get("description") })
-
     classified, log = time_call(
         classify_texts,
-        flat_texts,
+        raw_texts,
         model_id=config.gliner2.model_id,
-        labels=labels,
+        labels=get_labels_from_agents(config.gliner2.agents),
         multi_label=config.gliner2.multi_label,
         threshold=config.gliner2.threshold,
         include_confidence=config.gliner2.include_confidence,
+        device=config.gliner2.device,
         debug=config.debug,
+    )
+    logs.append(log)
+
+    extracted, log = time_call(
+        extract_entities,
+        config.gliner2.agents,
+        classified,
+        model_id=config.gliner2.model_id,
+        threshold=config.gliner2.threshold,
+        include_confidence=config.gliner2.include_confidence,
+        device=config.gliner2.device
     )
     logs.append(log)
 
@@ -113,7 +114,6 @@ def run_pipeline(base64_data: str, config: PipelineConfig) -> PipelineResult:
         zones=zones,
         extracted_zones=extracted,
         raw_texts=raw_texts,
-        cleaned_texts=cleaned_texts,
         classified_texts=classified,
         logs=logs,
     )

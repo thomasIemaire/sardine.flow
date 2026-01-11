@@ -28,6 +28,7 @@ class YoloDetectionConfig:
     model_path: str = "../sardine.agents/sard-det/best.pt"
     device: str = "cpu"
     confidence: float = 0.4
+    iou: float = 0.5
     padding: int = 8
 
 
@@ -36,6 +37,7 @@ class OcrConfig:
     exclude_zone_classes: List[str] = field(default_factory=lambda: ["logo", "signature"])
     lang: str = "fra+eng"
     config: str = "--oem 1 --psm 6"
+    device: str = "cpu"
 
 
 LabelSpec = Union[str, Dict[str, str]]
@@ -48,6 +50,7 @@ class Gliner2Config:
     multi_label: bool = False
     threshold: float = 0.2
     include_confidence: bool = False
+    device: str = "cpu"
 
 
 @dataclass(frozen=True)
