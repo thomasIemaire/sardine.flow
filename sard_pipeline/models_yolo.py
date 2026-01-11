@@ -1,4 +1,3 @@
-\
 """YOLO helpers (classification + detection) with an in-memory cache."""
 
 from __future__ import annotations
@@ -8,9 +7,11 @@ import threading
 from typing import Any, Dict, List, Literal, Optional, TypedDict
 
 from PIL import Image
-import torch
+# Torch n'est plus importé ici uniquement pour le device check, 
+# mais Ultralytics l'utilise en interne.
+import torch 
 
-from .utils import log_debug, require
+from .utils import log_debug, require, resolve_device
 
 try:
     from ultralytics import YOLO  # type: ignore
@@ -57,32 +58,6 @@ def _select_pages(images: List[Image.Image], page_mode: Literal["first_page_only
     return images
 
 
-def _resolve_device(device: str, debug: bool) -> str:
-    requested = (device or "cpu").lower()
-    if requested == "cpu":
-        return "cpu"
-    if requested.startswith("cuda"):
-        if not torch.cuda.is_available():
-            log_debug(
-                "CUDA indisponible; exécution sur CPU.",
-                debug,
-                tags=["yolo", "device"],
-            )
-            return "cpu"
-        capability = torch.cuda.get_device_capability()
-        arch = f"sm_{capability[0]}{capability[1]}"
-        supported = torch.cuda.get_arch_list()
-        if supported and arch not in supported:
-            log_debug(
-                f"Architecture GPU {arch} non supportée par cette version de PyTorch; "
-                "exécution sur CPU.",
-                debug,
-                tags=["yolo", "device"],
-            )
-            return "cpu"
-    return device
-
-
 def classify_images(
     images: List[Image.Image],
     *,
@@ -94,9 +69,10 @@ def classify_images(
     """Run image-level classification on each selected page."""
     model = get_cached_model(model_path)
     pages = _select_pages(images, page_mode)
-    resolved_device = _resolve_device(device, debug)
+    
+    # Use shared device resolution
+    resolved_device = resolve_device(device, debug=debug, log_tag="yolo")
 
-    # ultralytics accepts either a single image or a list. We always pass a list for consistency.
     predictions = model.predict(source=pages, device=resolved_device, save=False, verbose=False)
 
     results: List[Any] = []
@@ -126,7 +102,9 @@ def detect_zones(
 
     model = get_cached_model(model_path)
     pages = _select_pages(images, page_mode)
-    resolved_device = _resolve_device(device, debug)
+    
+    # Use shared device resolution
+    resolved_device = resolve_device(device, debug=debug, log_tag="yolo")
 
     det_results = model.predict(source=pages, device=resolved_device, conf=confidence, iou=iou, save=False, verbose=False)
 

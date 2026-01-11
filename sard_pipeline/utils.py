@@ -1,4 +1,3 @@
-\
 """Small utilities used across the pipeline.
 
 This module intentionally stays dependency-light.
@@ -59,6 +58,52 @@ def _json_dumps_safe(obj: Any) -> str:
     return json.dumps(obj, default=str, ensure_ascii=False)
 
 
+def resolve_device(device: str, debug: bool = False, log_tag: str = "device") -> str:
+    """
+    Resolve the device to use, falling back to CPU if CUDA is requested 
+    but unavailable or incompatible with the current PyTorch version.
+    """
+    requested = (device or "cpu").lower()
+    if requested == "cpu":
+        return "cpu"
+
+    # Lazy import to keep the module dependency-light at top-level
+    try:
+        import torch
+    except ImportError:
+        return "cpu"
+
+    if requested.startswith("cuda"):
+        if not torch.cuda.is_available():
+            log_debug(
+                "CUDA indisponible; exécution sur CPU.",
+                debug,
+                tags=[log_tag],
+            )
+            return "cpu"
+        
+        # Check architecture compatibility (e.g. prevent RTX 5070 crash on older PyTorch)
+        try:
+            capability = torch.cuda.get_device_capability()
+            arch = f"sm_{capability[0]}{capability[1]}"
+            supported = torch.cuda.get_arch_list()
+            if supported and arch not in supported:
+                log_debug(
+                    f"Architecture GPU {arch} non supportée par cette version de PyTorch; "
+                    "exécution sur CPU.",
+                    debug,
+                    tags=[log_tag],
+                )
+                return "cpu"
+        except Exception:
+            # If checking capability fails for any reason, let PyTorch handle it 
+            # or assume it's okay (fallback logic usually safer if we assume cpu on error, 
+            # but here we proceed if check fails to avoid blocking valid cases).
+            pass
+
+    return device
+
+
 def time_call(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Tuple[Any, Dict[str, Any]]:
     """Run *func* and return (result, log_dict).
 
@@ -103,12 +148,3 @@ def time_call(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Tuple[Any,
         "result": result,
     }
     return raw_result, log
-
-
-# ---------------------------------------------------------------------------
-# Backward-compatible aliases (keeps your existing imports working)
-# ---------------------------------------------------------------------------
-
-_log_debug = log_debug
-_timed_function = time_call
-_require = require

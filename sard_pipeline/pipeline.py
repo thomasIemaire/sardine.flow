@@ -1,4 +1,3 @@
-\
 """End-to-end pipeline that goes from base64 -> pages -> zones -> OCR -> text classification."""
 
 from __future__ import annotations
@@ -84,11 +83,13 @@ def run_pipeline(base64_data: str, config: PipelineConfig) -> PipelineResult:
     )
     logs.append(log)
 
+    # Classification using GLiNER2 config
     classified, log = time_call(
         classify_texts,
         raw_texts,
         model_id=config.gliner2.model_id,
-        labels=get_labels_from_agents(config.gliner2.agents),
+        # Classification uses agents to define high-level classes
+        labels=get_labels_from_agents(config.gliner_extract.agents),
         multi_label=config.gliner2.multi_label,
         threshold=config.gliner2.threshold,
         include_confidence=config.gliner2.include_confidence,
@@ -97,14 +98,15 @@ def run_pipeline(base64_data: str, config: PipelineConfig) -> PipelineResult:
     )
     logs.append(log)
 
-    extracted, log = time_call(
+    # Entity extraction using GLiNER Standard config
+    extracted_entities, log = time_call(
         extract_entities,
-        config.gliner2.agents,
+        config.gliner_extract.agents,
         classified,
-        model_id=config.gliner2.entity_model_id,
-        threshold=config.gliner2.threshold,
-        include_confidence=config.gliner2.include_confidence,
-        device=config.gliner2.device
+        model_id=config.gliner_extract.model_id,
+        threshold=config.gliner_extract.threshold,
+        device=config.gliner_extract.device,
+        debug=config.debug  # <--- Ajouté ici pour voir les logs de fallback
     )
     logs.append(log)
 
@@ -120,5 +122,5 @@ def run_pipeline(base64_data: str, config: PipelineConfig) -> PipelineResult:
 
 
 def run_logs_only(base64_data: str, config: PipelineConfig) -> List[Dict[str, Any]]:
-    """Backward-compatible helper that returns only the logs (like your old `run`)."""
+    """Backward-compatible helper that returns only the logs."""
     return run_pipeline(base64_data, config).logs
