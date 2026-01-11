@@ -46,6 +46,7 @@ LabelSpec = Union[str, Dict[str, str]]
 @dataclass(frozen=True)
 class Gliner2Config:
     model_id: str = "fastino/gliner2-large-2907"
+    entity_model_id: str = "urchade/gliner_multi-v2.1"
     agents: List[Dict[str, Any]] = field(default_factory=list)
     multi_label: bool = False
     threshold: float = 0.2

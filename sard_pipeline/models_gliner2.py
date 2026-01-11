@@ -1,5 +1,5 @@
 \
-"""GLiNER2 helpers with an in-memory cache."""
+"""GLiNER2 helpers with an in-memory cache, plus GLiNER entity extraction."""
 
 from __future__ import annotations
 
@@ -14,9 +14,16 @@ try:
 except Exception:  # pragma: no cover
     GLiNER2 = None  # type: ignore[assignment]
 
+try:
+    from gliner import GLiNER  # type: ignore
+except Exception:  # pragma: no cover
+    GLiNER = None  # type: ignore[assignment]
+
 
 _GLINER2_CACHE: Dict[str, Any] = {}
 _GLINER2_LOCK = threading.Lock()
+_GLINER_CACHE: Dict[str, Any] = {}
+_GLINER_LOCK = threading.Lock()
 
 
 def get_cached_gliner2_model(model_id: str, *, device: str = "cpu") -> Any:
@@ -42,6 +49,31 @@ def get_cached_gliner2_model(model_id: str, *, device: str = "cpu") -> Any:
             _GLINER2_CACHE[cache_key] = model
 
     return _GLINER2_CACHE[cache_key]
+
+
+def get_cached_gliner_model(model_id: str, *, device: str = "cpu") -> Any:
+    """Load GLiNER only once (thread-safe)."""
+    require(GLiNER, "gliner")
+
+    key = str(model_id).strip()
+    if not key:
+        raise ValueError("model_id GLiNER vide")
+
+    cache_key = f"{key}::{device}"
+    if cache_key in _GLINER_CACHE:
+        return _GLINER_CACHE[cache_key]
+
+    with _GLINER_LOCK:
+        if cache_key not in _GLINER_CACHE:
+            kwargs: Dict[str, Any] = {}
+            if device and _supports_kwarg(GLiNER.from_pretrained, "device"):
+                kwargs["device"] = device
+            model = GLiNER.from_pretrained(key, **kwargs)
+            if device and not kwargs and hasattr(model, "to"):
+                model = model.to(device)
+            _GLINER_CACHE[cache_key] = model
+
+    return _GLINER_CACHE[cache_key]
 
 
 def _normalize_labels(labels: Sequence[LabelSpec]) -> List[str]:
@@ -128,6 +160,35 @@ def get_entities_from_mapper(entities: Dict[str, Any], *, all_entities: List[str
     return out
 
 
+def _strip_entity_label(label: str) -> str:
+    label = label.split(" :: ", 1)[0]
+    return label.split(" (", 1)[0]
+
+
+def _group_gliner_entities(
+    raw_entities: Sequence[Dict[str, Any]],
+    *,
+    include_confidence: bool,
+) -> Dict[str, List[Dict[str, Any]]]:
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+
+    for entity in raw_entities:
+        label = entity.get("label")
+        if not label:
+            continue
+        entry: Dict[str, Any] = {
+            "start": entity.get("start"),
+            "end": entity.get("end"),
+            "text": entity.get("text"),
+        }
+        score = entity.get("score")
+        if include_confidence and score is not None:
+            entry["score"] = score
+        grouped.setdefault(_strip_entity_label(str(label)), []).append(entry)
+
+    return grouped
+
+
 def extract_entities(
     agents: Sequence[Dict[str, Any]],
     classified_texts: List[List[Dict[str, Any]]],
@@ -138,7 +199,7 @@ def extract_entities(
     device: str = "cpu",
 ) -> List[List[Dict[str, Any]]]:
     """Extract entities from short texts."""
-    model = get_cached_gliner2_model(model_id, device=device)
+    model = get_cached_gliner_model(model_id, device=device)
     all_entities = [e for agent in agents for e in list(agent.get("mapper", {}).keys())]
     out = []
 
@@ -150,13 +211,10 @@ def extract_entities(
             if not entities:
                 continue
             
-            raw = model.batch_extract_entities(
-                [r["text"] for r in page],
-                entity_types=entities,
-                threshold=threshold,
-                format_results=True,
-                include_confidence=include_confidence,
-            )
+            raw = [
+                model.predict_entities(text, entities, threshold=threshold)
+                for text in [r["text"] for r in page]
+            ]
 
             for i, r in enumerate(raw):
                 if page_idx >= len(out):
@@ -165,15 +223,8 @@ def extract_entities(
                 entry: Dict[str, Any] = {
                     "text": page[i]["text"],
                     "agent_reference": agent.get("reference"),
-                    "entities": r.get("entities", []),
+                    "entities": _group_gliner_entities(r, include_confidence=include_confidence),
                 }
-
-                entities = entry.get("entities")
-                if entities:
-                    entry["entities"] = {
-                        (k.split(" :: ", 1)[0] if " :: " in k else k): v
-                        for k, v in entities.items()
-                    }
 
                 out[page_idx].append(entry)
     

@@ -101,7 +101,7 @@ def run_pipeline(base64_data: str, config: PipelineConfig) -> PipelineResult:
         extract_entities,
         config.gliner2.agents,
         classified,
-        model_id=config.gliner2.model_id,
+        model_id=config.gliner2.entity_model_id,
         threshold=config.gliner2.threshold,
         include_confidence=config.gliner2.include_confidence,
         device=config.gliner2.device
