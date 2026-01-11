@@ -1,5 +1,5 @@
 \
-"""GLiNER2 helpers with an in-memory cache."""
+"""GLiNER helpers with an in-memory cache."""
 
 from __future__ import annotations
 
@@ -10,38 +10,38 @@ from .config import LabelSpec
 from .utils import _supports_kwarg, require
 
 try:
-    from gliner2 import GLiNER2  # type: ignore
+    from gliner import GLiNER  # type: ignore
 except Exception:  # pragma: no cover
-    GLiNER2 = None  # type: ignore[assignment]
+    GLiNER = None  # type: ignore[assignment]
 
 
-_GLINER2_CACHE: Dict[str, Any] = {}
-_GLINER2_LOCK = threading.Lock()
+_GLINER_CACHE: Dict[str, Any] = {}
+_GLINER_LOCK = threading.Lock()
 
 
-def get_cached_gliner2_model(model_id: str, *, device: str = "cpu") -> Any:
-    """Load GLiNER2 only once (thread-safe)."""
-    require(GLiNER2, "gliner2")
+def get_cached_gliner_model(model_id: str, *, device: str = "cpu") -> Any:
+    """Load GLiNER only once (thread-safe)."""
+    require(GLiNER, "gliner")
 
     key = str(model_id).strip()
     if not key:
-        raise ValueError("model_id GLiNER2 vide")
+        raise ValueError("model_id GLiNER vide")
 
     cache_key = f"{key}::{device}"
-    if cache_key in _GLINER2_CACHE:
-        return _GLINER2_CACHE[cache_key]
+    if cache_key in _GLINER_CACHE:
+        return _GLINER_CACHE[cache_key]
 
-    with _GLINER2_LOCK:
-        if cache_key not in _GLINER2_CACHE:
+    with _GLINER_LOCK:
+        if cache_key not in _GLINER_CACHE:
             kwargs: Dict[str, Any] = {}
-            if device and _supports_kwarg(GLiNER2.from_pretrained, "device"):
+            if device and _supports_kwarg(GLiNER.from_pretrained, "device"):
                 kwargs["device"] = device
-            model = GLiNER2.from_pretrained(key, **kwargs)
+            model = GLiNER.from_pretrained(key, **kwargs)
             if device and not kwargs and hasattr(model, "to"):
                 model = model.to(device)
-            _GLINER2_CACHE[cache_key] = model
+            _GLINER_CACHE[cache_key] = model
 
-    return _GLINER2_CACHE[cache_key]
+    return _GLINER_CACHE[cache_key]
 
 
 def _normalize_labels(labels: Sequence[LabelSpec]) -> List[str]:
@@ -57,8 +57,28 @@ def _normalize_labels(labels: Sequence[LabelSpec]) -> List[str]:
     return out
 
 
+def _batch_predict_entities(
+    model: Any,
+    texts: List[str],
+    labels: Sequence[str],
+    *,
+    threshold: float,
+) -> List[List[Dict[str, Any]]]:
+    if hasattr(model, "batch_predict_entities"):
+        return model.batch_predict_entities(texts, labels, threshold=threshold)
+    return [model.predict_entities(text, labels, threshold=threshold) for text in texts]
+
+
+def _score_from_entity(entity: Dict[str, Any]) -> float:
+    for key in ("score", "confidence", "probability"):
+        value = entity.get(key)
+        if value is not None:
+            return float(value)
+    return 0.0
+
+
 def get_labels_from_agents(agents: Sequence[Dict[str, Any]]) -> List[LabelSpec]:
-    """Extract GLiNER2 labels from agent configs."""
+    """Extract GLiNER labels from agent configs."""
     labels: List[LabelSpec] = []
     for a in agents:
         if a.get("target_zone"):
@@ -78,36 +98,43 @@ def classify_texts(
     device: str = "cpu",
 ) -> List[List[Dict[str, Any]]]:
     """Classify short texts into high-level labels."""
-    model = get_cached_gliner2_model(model_id, device=device)
+    model = get_cached_gliner_model(model_id, device=device)
 
     sep = " :: "
-    task_name = "text_classification"
-    tasks = {
-        task_name: {
-            "labels": _normalize_labels(labels),
-            "multi_label": multi_label,
-            "cls_threshold": threshold,
-        }
-    }
-
+    normalized_labels = _normalize_labels(labels)
     out: List[List[Dict[str, Any]]] = []
 
     for page in texts:
-        raw = model.batch_classify_text(
+        raw = _batch_predict_entities(
+            model,
             page,
-            tasks=tasks,
+            normalized_labels,
             threshold=threshold,
-            format_results=True,
-            include_confidence=include_confidence,
-            include_spans=False,
         )
 
-        flat = [{"text": page[i], "class": r.get(task_name)} for i, r in enumerate(raw)]
+        flat: List[Dict[str, Any]] = []
+        for i, entities in enumerate(raw):
+            label_scores: Dict[str, float] = {}
+            for entity in entities:
+                label = entity.get("label")
+                if not label:
+                    continue
+                score = _score_from_entity(entity)
+                label_scores[label] = max(score, label_scores.get(label, 0.0))
 
-        # Remove label descriptions (keep only the key).
-        for r in flat:
-            for e in r["class"]:
-                e["label"] = e["label"].split(sep)[0] if sep in e["label"] else e["label"]
+            classes = [{"label": label, "score": score} for label, score in label_scores.items()]
+            classes.sort(key=lambda item: item["score"], reverse=True)
+            if not multi_label and classes:
+                classes = [classes[0]]
+            if not include_confidence:
+                for entry in classes:
+                    entry.pop("score", None)
+
+            # Remove label descriptions (keep only the key).
+            for entry in classes:
+                entry["label"] = entry["label"].split(sep)[0] if sep in entry["label"] else entry["label"]
+
+            flat.append({"text": page[i], "class": classes})
 
         out.append(flat)
 
@@ -138,7 +165,7 @@ def extract_entities(
     device: str = "cpu",
 ) -> List[List[Dict[str, Any]]]:
     """Extract entities from short texts."""
-    model = get_cached_gliner2_model(model_id, device=device)
+    model = get_cached_gliner_model(model_id, device=device)
     all_entities = [e for agent in agents for e in list(agent.get("mapper", {}).keys())]
     out = []
 
@@ -150,22 +177,39 @@ def extract_entities(
             if not entities:
                 continue
             
-            raw = model.batch_extract_entities(
+            raw = _batch_predict_entities(
+                model,
                 [r["text"] for r in page],
-                entity_types=entities,
+                entities,
                 threshold=threshold,
-                format_results=True,
-                include_confidence=include_confidence,
             )
 
             for i, r in enumerate(raw):
                 if page_idx >= len(out):
                     out.append([])
 
+                grouped_entities: Dict[str, List[Dict[str, Any]]] = {}
+                for entity in r:
+                    label = entity.get("label")
+                    if not label:
+                        continue
+                    grouped_entities.setdefault(label, []).append(
+                        {
+                            "text": entity.get("text"),
+                            "start": entity.get("start"),
+                            "end": entity.get("end"),
+                            "score": _score_from_entity(entity),
+                        }
+                    )
+                if not include_confidence:
+                    for group in grouped_entities.values():
+                        for item in group:
+                            item.pop("score", None)
+
                 entry: Dict[str, Any] = {
                     "text": page[i]["text"],
                     "agent_reference": agent.get("reference"),
-                    "entities": r.get("entities", []),
+                    "entities": grouped_entities,
                 }
 
                 entities = entry.get("entities")
