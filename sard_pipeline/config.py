@@ -1,4 +1,3 @@
-\
 """Configuration for the document pipeline."""
 
 from __future__ import annotations
@@ -45,11 +44,21 @@ LabelSpec = Union[str, Dict[str, str]]
 
 @dataclass(frozen=True)
 class Gliner2Config:
+    """Config pour la CLASSIFICATION de texte (via gliner2)."""
     model_id: str = "fastino/gliner2-large-2907"
-    agents: List[Dict[str, Any]] = field(default_factory=list)
     multi_label: bool = False
     threshold: float = 0.2
     include_confidence: bool = False
+    device: str = "cpu"
+
+
+@dataclass(frozen=True)
+class GlinerExtractionConfig:
+    """Config pour l'EXTRACTION d'entités (via gliner standard)."""
+    model_id: str = "urchade/gliner_multi-v2.1"
+    # Les agents définissent quelles entités chercher
+    agents: List[Dict[str, Any]] = field(default_factory=list)
+    threshold: float = 0.3
     device: str = "cpu"
 
 
@@ -60,5 +69,8 @@ class PipelineConfig:
     yolo_cls: YoloClassificationConfig = field(default_factory=YoloClassificationConfig)
     yolo_det: YoloDetectionConfig = field(default_factory=YoloDetectionConfig)
     ocr: OcrConfig = field(default_factory=OcrConfig)
+    # Classification (GLiNER2)
     gliner2: Gliner2Config = field(default_factory=Gliner2Config)
+    # Extraction (GLiNER standard)
+    gliner_extract: GlinerExtractionConfig = field(default_factory=GlinerExtractionConfig)
     debug: bool = False
